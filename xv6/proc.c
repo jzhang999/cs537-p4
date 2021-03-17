@@ -27,6 +27,12 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+// define a queue for the current scheduling queue
+struct proc* queue[NPROC];
+int front = -1;
+int rear = -1;
+int size = 0;
+
 void
 pinit(void)
 {
@@ -387,18 +393,44 @@ int getslice(int pid){
   return -1;
 }
 
-void remove_queue(node *removed_node){
+// void remove_queue(node *removed_node){
   
-}
+// }
 
-void check_status(void){
-  struct proc *p;
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->state == ZOMBIE){
-      remove_queue(p->ll_node);
+// void check_status(void){
+//   struct proc *p;
+//   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+//     if(p->state == ZOMBIE){
+//       remove_queue(p->ll_node);
+//     }
+//   }
+// }
+void enqueue(struct proc* p) {
+  if (size < NPROC && rear < NPROC - 1) {
+    if (size == 0) {
+      queue[0] = p;  // enqueue the first process
+      size++;
+      front = 0;
+      rear = 0;
+    }
+    else {
+      queue[rear + 1] = p;
+      size++;
+      rear++;
     }
   }
+  else {
+    printf(2, "enqueue failed.\n");
+  }
 }
+
+void dequeue() {
+  if (size != 0) {
+    front++;
+    size--;
+  }
+}
+
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -421,26 +453,81 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
 
-    check_status(); // check if we need to remove any exited proc
-    // we should add something here to change the schedule order
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
+   // check_status(); // check if we need to remove any exited proc
+    
+    // if the queue is empty
+    if (size == 0) {
+      // we should add something here to change the schedule order
+      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+        if(p->state != RUNNABLE)
+          continue;
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+        enqueue(p);  // enqueue the first process
+        
+        // Switch to chosen process.  It is the process's job
+        // to release ptable.lock and then reacquire it
+        // before jumping back to us.
+        c->proc = p;
+        switchuvm(p);
+        p->state = RUNNING;
 
-      swtch(&(c->scheduler), p->context);
+        swtch(&(c->scheduler), p->context);
+        switchkvm();
+
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        c->proc = 0;
+      }
+    }
+
+    // not empty, look at head
+    struct proc *head = queue[front];
+    if (head->schedticks < head->time_slice + head->compticks) {  // compticks not cummulative
+      c->proc = head;
+      switchuvm(head);
+      head->state = RUNNING;
+
+      swtch(&(c->scheduler), head->context);
       switchkvm();
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
       c->proc = 0;
     }
+    else {
+      // move the head to tail, schedule the new head
+      dequeue();
+      enqueue(head);
+      head = queue[front];
+
+      c->proc = head;
+      switchuvm(head);
+      head->state = RUNNING;
+
+      swtch(&(c->scheduler), head->context);
+      switchkvm();
+
+      c->proc = 0;
+    }
+
+
+    // // we should add something here to change the schedule order
+    // for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    //   if(p->state != RUNNABLE)
+    //     continue;
+
+    //   // Switch to chosen process.  It is the process's job
+    //   // to release ptable.lock and then reacquire it
+    //   // before jumping back to us.
+    //   c->proc = p;
+    //   switchuvm(p);
+    //   p->state = RUNNING;
+
+    //   swtch(&(c->scheduler), p->context);
+    //   switchkvm();
+
+    //   // Process is done running for now.
+    //   // It should have changed its p->state before coming back.
+    //   c->proc = 0;
+    // }
     release(&ptable.lock);
 
   }
