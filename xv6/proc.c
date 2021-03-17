@@ -8,6 +8,7 @@
 #include "spinlock.h"
 
 #include "pstat.h" //???
+#include <stddef.h>
 
 struct {
   struct spinlock lock;
@@ -625,11 +626,11 @@ procdump(void)
 
 int getpinfo(struct pstat* stat) {
   stat = (struct pstat*) malloc(sizeof(struct pstat));
-  // if(stat == NULL) {
-  //   printf(2, "malloc() error\n");
-  //   exit();
-  // }
-  // NULL not defined??
+  if(stat == NULL) {
+    printf(2, "malloc() error\n");
+    return -1;
+  }
+  // NULL not defined?? #include <stddef.h>
   
   int index = 0;  // index to put info into pstat
   struct proc *p;
@@ -644,4 +645,6 @@ int getpinfo(struct pstat* stat) {
 
     index++;
   }
+
+  return 0;
 }
