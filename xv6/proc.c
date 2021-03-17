@@ -7,6 +7,8 @@
 #include "proc.h"
 #include "spinlock.h"
 
+#include "pstat.h" //???
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -15,6 +17,7 @@ struct {
   node *tail;
 } ptable;
 
+struct pstat* stat;
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -617,5 +620,27 @@ procdump(void)
         cprintf(" %p", pc[i]);
     }
     cprintf("\n");
+  }
+}
+
+int getpinfo(struct pstat* stat) {
+  stat = (struct pstat*) malloc(sizeof(struct pstat));
+  // if(stat == NULL) {
+  //   printf(2, "malloc() error\n");
+  //   exit();
+  // }
+  
+  int index = 0;  // index to put info into pstat
+  struct proc *p;
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    stat->inuse[index] = 1;
+    stat->pid[index] = p->pid;
+    stat->timeslice[index] = p->time_slice;
+    // stat->compticks[index] = 
+    // stat->schedticks[index] = 
+    // stat->sleepticks[index] = 
+    // stat->switches[index] = 
+
+    index++;
   }
 }

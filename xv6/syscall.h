@@ -23,3 +23,4 @@
 #define SYS_getslice 22
 #define SYS_setslice 23
 #define SYS_fork2 24
+#define SYS_getpinfo 25
