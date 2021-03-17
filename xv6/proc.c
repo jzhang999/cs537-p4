@@ -18,7 +18,7 @@ struct {
   node *tail;
 } ptable;
 
-struct pstat* stat;
+// struct pstat* stat; // ? do not need this
 static struct proc *initproc;
 
 int nextpid = 1;
