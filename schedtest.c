@@ -40,13 +40,13 @@ int main(int argc, char **argv) {
     char* sleepB = argv[4];
     int sleepParent = atoi(argv[5]);
 
+    // not sure where to put ORZ...................................
+    sleep(sleepParent);
+    
     // create 2 child processes
     fork_child(sliceA, sleepA);
     fork_child(sliceB, sleepB);
 
-    // not sure where to put ORZ...................................
-    sleep(sleepParent);
-    
     int compticksA;
     int compticksB;
     if (getpinfo(stat) == 0) {  // success
