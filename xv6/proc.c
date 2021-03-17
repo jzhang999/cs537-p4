@@ -629,6 +629,7 @@ int getpinfo(struct pstat* stat) {
   //   printf(2, "malloc() error\n");
   //   exit();
   // }
+  // NULL not defined??
   
   int index = 0;  // index to put info into pstat
   struct proc *p;
@@ -636,10 +637,10 @@ int getpinfo(struct pstat* stat) {
     stat->inuse[index] = 1;
     stat->pid[index] = p->pid;
     stat->timeslice[index] = p->time_slice;
-    // stat->compticks[index] = 
-    // stat->schedticks[index] = 
-    // stat->sleepticks[index] = 
-    // stat->switches[index] = 
+    stat->compticks[index] = p->compticks;
+    stat->schedticks[index] = p->schedticks;
+    stat->sleepticks[index] = p->sleepticks;
+    stat->switches[index] = p->switches;
 
     index++;
   }

@@ -51,6 +51,10 @@ struct proc {
   char name[16];               // Process name (debugging)
   node *ll_node;
   int time_slice; // used for allocated time_slice
+  int compticks;    // number of compensation ticks this process has used
+  int schedticks;   // total number of timer ticks this process has been scheduled
+  int sleepticks;   // number of ticks during which this process was blocked
+  int switches;     // total num times this process has been scheduled
 };
 
 // Process memory is laid out contiguously, low addresses first:
