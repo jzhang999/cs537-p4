@@ -2,12 +2,16 @@
 #include "pstat.h"
 
 struct pstat* cur_stat; // process statistics
+int pidA = -1;
+int pidB = -1;
 
-static void fork_child(int slice, char *sleepT) {
+static int fork_child(int slice, char *sleepT) {
     int pid = fork2(slice);
+    int child_pid = -1;
 
     if (pid != -1) {
         if (pid == 0) {  // child
+            child_pid = getpid();
             // args to exec
             char *args[2];
             args[0] = "loop";
@@ -24,6 +28,8 @@ static void fork_child(int slice, char *sleepT) {
     } else {  // fork failed
         printf(2, "fork failed\n");
     }
+
+    return child_pid;
 }
 
 int main(int argc, char **argv) {
@@ -40,30 +46,33 @@ int main(int argc, char **argv) {
     char* sleepB = argv[4];
     int sleepParent = atoi(argv[5]);
 
-    // not sure where to put ORZ...................................
+    // not sure where to put 
     sleep(sleepParent);
     
     // create 2 child processes
-    fork_child(sliceA, sleepA);
-    fork_child(sliceB, sleepB);
+    pidA = fork_child(sliceA, sleepA);
+    pidB = fork_child(sliceB, sleepB);
 
-    // int compticksA;
-    // int compticksB;
     cur_stat = (struct pstat*) malloc(sizeof(struct pstat*));
-    int pidA = -1;
-    int pidB = -1;
+    int compticksA;
+    int compticksB;
 
     if (getpinfo(cur_stat) == 0) {  // success
-        // compticksA = cur_stat->compticks[1];
-        // compticksB = cur_stat->compticks[2];
-        pidA = cur_stat->pid[1];
-        pidB = cur_stat->pid[2];
+        // get the info for the process, given pid
+        for (int i = 0; i < NPROC; i++) {
+            if (pidA == cur_stat->pid[i]) {
+                compticksA = cur_stat->compticks[i];
+            }
+            if (pidB == cur_stat->pid[i]) {
+                compticksB = cur_stat->compticks[i];
+            }
+        }
     }
     else {
         printf(2, "get info failed.\n");
     }
 
-    printf(1, "this is pid: %d %d\n", pidA, pidB);
+    printf(1, "%d %d\n", compticksA, compticksB);
     
     exit();
 }
