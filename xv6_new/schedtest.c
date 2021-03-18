@@ -50,8 +50,9 @@ int main(int argc, char **argv) {
     // int compticksA;
     // int compticksB;
     cur_stat = (struct pstat*) malloc(sizeof(struct pstat*));
-    int pidA = 0;
-    int pidB = 0;
+    int pidA = -1;
+    int pidB = -1;
+
     if (getpinfo(cur_stat) == 0) {  // success
         // compticksA = cur_stat->compticks[1];
         // compticksB = cur_stat->compticks[2];
@@ -62,7 +63,7 @@ int main(int argc, char **argv) {
         printf(2, "get info failed.\n");
     }
 
-    printf(1, "%d %d\n", pidA, pidB);
+    printf(1, "this is pid: %d %d\n", pidA, pidB);
     
     exit();
 }

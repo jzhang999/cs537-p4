@@ -179,7 +179,7 @@ userinit(void)
   p->tf->esp = PGSIZE;
   p->tf->eip = 0;  // beginning of initcode.S
   p->time_slice = 1; // initial user process has time_slice 1
-  p->schedticks = 1; // because it will be schedule first
+  p->switches = 1; // because it will be schedule first
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
@@ -371,16 +371,15 @@ wait(void)
   }
 }
 
-// we should add something here to allow deschedule process when number > older slice number?
 int setslice(int pid, int slice){
   struct proc *cur_p;
   if (pid < 0 || slice <= 0){
     return -1;
   }
+
   for(cur_p = ptable.proc; cur_p < &ptable.proc[NPROC]; cur_p++){
     if (cur_p->pid == pid){
       cur_p->time_slice = slice;
-      // maybe update something here
       return 0;
     }
   }
@@ -424,7 +423,7 @@ scheduler(void)
     p->schedticks++; // update its scheduled time ticks
     
     // it means we should deschedule the current process
-    if(p->curticks == p->time_slice + p->compticks){ // need to check here again, should we increment first or check slice first
+    if(p->curticks >= p->time_slice + p->compticks){ // need to check here again, should we increment first or check slice first
       int next = (ptable.head + 1) % NPROC; // move to the next process
       p->curticks = 0; // we are ready to deschedule it, so updat its current tick to 0 for next time
       p->state = RUNNABLE; // mark the process into RUNNABLE state for next time
@@ -646,6 +645,7 @@ int getpinfo(struct pstat* stat) {
   int index = 0;  // index to put info into pstat
   struct proc *p;
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    
     stat->inuse[index] = 1;
     stat->pid[index] = p->pid;
     stat->timeslice[index] = p->time_slice;
