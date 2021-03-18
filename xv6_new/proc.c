@@ -25,8 +25,11 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
-void enqueue(struct proc* p) {
-  if (ptable.size < NPROC - 1) {
+void enqueue(struct proc* p) { // add the process to the tail of queue
+  if(ptable.size == 0 && ptable.head == 0 && ptable.tail == 0){ // first time to enqueue
+    ptable.queue[ptable.head] = p;
+    ptable.size++;
+  } else if (ptable.size < NPROC - 1) {
     ptable.tail = (ptable.tail + 1) % NPROC;
     ptable.queue[ptable.tail] = p;
     ptable.size++;
@@ -37,7 +40,7 @@ void enqueue(struct proc* p) {
 }
 
 void dequeue() {
-  if (ptable.size != 0){
+  if (ptable.size != 0){ // move head to the next one
     ptable.head = (ptable.head + 1) % NPROC;
     ptable.size--;
   }
@@ -111,6 +114,11 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->compticks = 0;
+  p->schedticks = 0;
+  p->sleepticks = 0;
+  p->switches = 0;
+  p->curticks = 0;  // intialize the all required fields
 
   release(&ptable.lock);
 
@@ -134,14 +142,16 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
-  
-  p->compticks = 0;
-  p->schedticks = 0;
-  p->sleepticks = 0;
-  p->switches = 0;
-  p->curticks = 0;  // intialize the all required fields
 
   return p;
+}
+
+void
+ptableinit(void)
+{
+  ptable.head = 0;
+  ptable.tail = 0;
+  ptable.size = 0; // the queue is empty in the beginning
 }
 
 //PAGEBREAK: 32
@@ -152,6 +162,7 @@ userinit(void)
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
+  ptableinit();  // initialize the queue in ptable
   p = allocproc();
   
   initproc = p;
@@ -179,6 +190,7 @@ userinit(void)
   // because the assignment might not be atomic.
   acquire(&ptable.lock);
 
+  enqueue(p); // add the first user process to queue
   p->state = RUNNABLE;
 
   release(&ptable.lock);
@@ -246,12 +258,11 @@ fork2(int slice)
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
 
   pid = np->pid;
-  np->time_slice = slice;
+  np->time_slice = slice; // set up the process to its parent slice
   
   acquire(&ptable.lock);
   
   enqueue(np); // add this process to the queue
-
   np->state = RUNNABLE;
 
   release(&ptable.lock);
@@ -311,6 +322,7 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+  dequeue(); // remove the exited process from queue
   sched();
   panic("zombie exit");
 }
@@ -410,10 +422,12 @@ scheduler(void)
     p = ptable.queue[ptable.head]; // we get the head (which is current running process)
     p->curticks++;
     p->schedticks++; // update its scheduled time ticks
+    
     // it means we should deschedule the current process
     if(p->curticks == p->time_slice + p->compticks){ // need to check here again, should we increment first or check slice first
       int next = (ptable.head + 1) % NPROC; // move to the next process
       p->curticks = 0; // we are ready to deschedule it, so updat its current tick to 0 for next time
+      p->state = RUNNABLE; // mark the process into RUNNABLE state for next time
       dequeue(); // remove it from queue
       enqueue(p); // add it to tail
 
