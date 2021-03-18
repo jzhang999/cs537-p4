@@ -126,7 +126,7 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
-  p->time_slice = slice;
+  // p->time_slice = slice;
   p->compticks = 0;
   p->schedticks = 0;
   p->sleepticks = 0;
@@ -263,12 +263,12 @@ int fork2(int slice){
 
   pid = np->pid;
 
-  // np->time_slice = slice;
+  np->time_slice = slice;
   // np->ll_node->proc = np; // not sure if we need this, double check later
 
   acquire(&ptable.lock);
 
-  enqueue(p); // add this process to the queue
+  enqueue(np); // add this process to the queue
   np->state = RUNNABLE;
 
   release(&ptable.lock);
@@ -328,7 +328,7 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
-  dequeue() // remove the exited process from the queue
+  dequeue(); // remove the exited process from the queue
   sched();
   panic("zombie exit");
 }
@@ -416,7 +416,7 @@ int getslice(int pid){
 //   }
 // }
 void enqueue(struct proc* p) {
-  if (size < NPROC) {
+  if (ptable.size < NPROC) {
     // if (size == 0) {
     //   queue[0] = p;  // enqueue the first process
     //   size++;
@@ -442,8 +442,8 @@ void dequeue() {
   //   front++;
   //   size--;
   // }
-  if (size != 0){
-    ptable.head = (ptable.front + 1) % NPROC;
+  if (ptable.size != 0){
+    ptable.head = (ptable.head + 1) % NPROC;
     ptable.size--;
   }
 }
@@ -479,14 +479,14 @@ scheduler(void)
     if(p->curticks == p->time_slice + p->compticks){ // need to check here again, should we increment first or check slice first
       int next = (ptable.head + 1) % NPROC; // move to the next process
       p->curticks = 0; // we are ready to deschedule it, so updat its current tick to 0 for next time
-      dequeue() // remove it from queue
-      enqueue(p) // add it to tail
+      dequeue(); // remove it from queue
+      enqueue(p); // add it to tail
       
-      if(size == 1){ // only current one are ready for next time, still increment its swithces number
+      if(ptable.size == 1){ // only current one are ready for next time, still increment its swithces number
         p->switches++;
       } else{ // switch to new one
         ptable.head = next;
-        p = ptable.queue[ptable.head] // update p to chosen process
+        p = ptable.queue[ptable.head]; // update p to chosen process
         p->switches++;  // update its number of switches
       }
       
@@ -708,7 +708,7 @@ procdump(void)
 }
 
 int getpinfo(struct pstat* stat) {
-  stat = (struct pstat*) malloc(sizeof(struct pstat));
+  stat = (struct pstat*) malloc(sizeof(struct pstat*));
   if(stat == NULL) {
     printf(2, "malloc() error\n");
     return -1;

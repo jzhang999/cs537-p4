@@ -115,7 +115,7 @@ int
 sys_fork2(void)
 {
   int time_slice;
-  if(argin(0, &time_slice) < 0)
+  if(argint(0, &time_slice) < 0)
     return -1;
   return fork2(time_slice);
 }
@@ -123,5 +123,9 @@ sys_fork2(void)
 int
 sys_getpinfo(void)
 {
-  struct 
+  struct pstat *stat;
+
+  if(argptr(1, (struct pstat*)&stat, sizeof(struct pstat*)) < 0)
+    return -1;
+  return getpinfo(stat);
 }
