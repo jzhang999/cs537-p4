@@ -106,6 +106,7 @@ extern int sys_uptime(void);
 extern int sys_getslice(void);
 extern int sys_setslice(void);
 extern int sys_fork2(void);
+extern int sys_getpinfo(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -132,6 +133,7 @@ static int (*syscalls[])(void) = {
 [SYS_getslice]       sys_getslice,
 [SYS_setslice]   sys_setslice,
 [SYS_fork2]   sys_fork2,
+[SYS_getpinfo]   sys_getpinfo,
 };
 
 void

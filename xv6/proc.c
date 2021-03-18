@@ -13,9 +13,10 @@
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
-  node ll_node[NPROC]; // so we can allocate in stack?
-  node *head;
-  node *tail;
+  struct proc* queue[NPROC];
+  int head;
+  int tail;
+  int size;
 } ptable;
 
 // struct pstat* stat; // ? do not need this
@@ -28,10 +29,10 @@ extern void trapret(void);
 static void wakeup1(void *chan);
 
 // define a queue for the current scheduling queue
-struct proc* queue[NPROC];
-int front = -1;
-int rear = -1;
-int size = 0;
+// struct proc* queue[NPROC];
+// int front = -1;
+// int rear = -1;
+// int size = 0;
 
 void
 pinit(void)
@@ -125,36 +126,43 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  p->time_slice = slice;
+  p->compticks = 0;
+  p->schedticks = 0;
+  p->sleepticks = 0;
+  p->switches = 0;
+  p->curticks = 0;  // intialize the all required fields
   // initialize the node for process
-  node *new_node;
-   for (int i = 0; i < NPROC; i++){
-    // we can use this node for process
-    if (ptable.ll_node[i].occupied == 0){
-      new_node = &ptable.ll_node[i];
-      new_node->occupied = 1; // update its condition so will not re-allocate
-      new_node->proc = p; // set up corresponding process
-      if ((ptable.head == 0) && (ptable.tail == 0)){ // it means first time allocation
-        ptable.head = new_node;
-        ptable.tail = new_node;
-        new_node->prev = 0;
-        new_node->next = 0; // so it is only node
-        p->ll_node = new_node; // set up corresponding node
-        break;
-      }
-      new_node->prev = ptable.tail;
-      ptable.tail->next = new_node; // we can put the new process to the end of queue
-      new_node->next = 0;
-      ptable.tail = new_node;
-      p->ll_node = new_node;
-      break;
-    }
-  }
+  // node *new_node;
+  //  for (int i = 0; i < NPROC; i++){
+  //   // we can use this node for process
+  //   if (ptable.ll_node[i].occupied == 0){
+  //     new_node = &ptable.ll_node[i];
+  //     new_node->occupied = 1; // update its condition so will not re-allocate
+  //     new_node->proc = p; // set up corresponding process
+  //     if ((ptable.head == 0) && (ptable.tail == 0)){ // it means first time allocation
+  //       ptable.head = new_node;
+  //       ptable.tail = new_node;
+  //       new_node->prev = 0;
+  //       new_node->next = 0; // so it is only node
+  //       p->ll_node = new_node; // set up corresponding node
+  //       break;
+  //     }
+  //     new_node->prev = ptable.tail;
+  //     ptable.tail->next = new_node; // we can put the new process to the end of queue
+  //     new_node->next = 0;
+  //     ptable.tail = new_node;
+  //     p->ll_node = new_node;
+  //     break;
+  //   }
+  // }
   return p;
 }
 
 void ptableinit(void){
   ptable.head = 0;
-  ptable.tail = 0; // same as set to NULL
+  ptable.tail = NPROC - 1;
+  ptable.size = 0;
 }
 
 //PAGEBREAK: 32
@@ -181,8 +189,8 @@ userinit(void)
   p->tf->eflags = FL_IF;
   p->tf->esp = PGSIZE;
   p->tf->eip = 0;  // beginning of initcode.S
-
   p->time_slice = 1; // initial user process has time_slice 1
+  p->schedticks = 1; // because it will be schedule first
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
@@ -255,11 +263,12 @@ int fork2(int slice){
 
   pid = np->pid;
 
-  np->time_slice = slice;
-  np->ll_node->proc = np; // not sure if we need this, double check later
+  // np->time_slice = slice;
+  // np->ll_node->proc = np; // not sure if we need this, double check later
 
   acquire(&ptable.lock);
 
+  enqueue(p); // add this process to the queue
   np->state = RUNNABLE;
 
   release(&ptable.lock);
@@ -319,6 +328,7 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+  dequeue() // remove the exited process from the queue
   sched();
   panic("zombie exit");
 }
@@ -406,18 +416,21 @@ int getslice(int pid){
 //   }
 // }
 void enqueue(struct proc* p) {
-  if (size < NPROC && rear < NPROC - 1) {
-    if (size == 0) {
-      queue[0] = p;  // enqueue the first process
-      size++;
-      front = 0;
-      rear = 0;
-    }
-    else {
-      queue[rear + 1] = p;
-      size++;
-      rear++;
-    }
+  if (size < NPROC) {
+    // if (size == 0) {
+    //   queue[0] = p;  // enqueue the first process
+    //   size++;
+    //   front = 0;
+    //   rear = 0;
+    // }
+    // else {
+    //   queue[rear + 1] = p;
+    //   size++;
+    //   rear++;
+    // }
+    ptable.tail = (ptable.tail + 1) % NPROC;
+    ptable.queue[ptable.tail] = p;
+    ptable.size++;
   }
   else {
     printf(2, "enqueue failed.\n");
@@ -425,9 +438,13 @@ void enqueue(struct proc* p) {
 }
 
 void dequeue() {
-  if (size != 0) {
-    front++;
-    size--;
+  // if (size != 0) {
+  //   front++;
+  //   size--;
+  // }
+  if (size != 0){
+    ptable.head = (ptable.front + 1) % NPROC;
+    ptable.size--;
   }
 }
 
@@ -455,59 +472,38 @@ scheduler(void)
 
    // check_status(); // check if we need to remove any exited proc
     
-    // if the queue is empty
-    if (size == 0) {
-      // we should add something here to change the schedule order
-      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-        if(p->state != RUNNABLE)
-          continue;
-
-        enqueue(p);  // enqueue the first process
-        
-        // Switch to chosen process.  It is the process's job
-        // to release ptable.lock and then reacquire it
-        // before jumping back to us.
-        c->proc = p;
-        switchuvm(p);
-        p->state = RUNNING;
-
-        swtch(&(c->scheduler), p->context);
-        switchkvm();
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
+    p = ptable.queue[ptable.head]; // we get the head (which is current running process)
+    p->curticks++;
+    p->schedticks++; // update its scheduled time ticks
+    // it means we should deschedule the current process
+    if(p->curticks == p->time_slice + p->compticks){ // need to check here again, should we increment first or check slice first
+      int next = (ptable.head + 1) % NPROC; // move to the next process
+      p->curticks = 0; // we are ready to deschedule it, so updat its current tick to 0 for next time
+      dequeue() // remove it from queue
+      enqueue(p) // add it to tail
+      
+      if(size == 1){ // only current one are ready for next time, still increment its swithces number
+        p->switches++;
+      } else{ // switch to new one
+        ptable.head = next;
+        p = ptable.queue[ptable.head] // update p to chosen process
+        p->switches++;  // update its number of switches
       }
-    }
+      
+      // Switch to chosen process.  It is the process's job
+      // to release ptable.lock and then reacquire it
+      // before jumping back to us.
+      c->proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
 
-    // not empty, look at head
-    struct proc *head = queue[front];
-    if (head->schedticks < head->time_slice + head->compticks) {  // compticks not cummulative
-      c->proc = head;
-      switchuvm(head);
-      head->state = RUNNING;
-
-      swtch(&(c->scheduler), head->context);
+      swtch(&(c->scheduler), p->context);
       switchkvm();
 
+      // Process is done running for now.
+      // It should have changed its p->state before coming back.
       c->proc = 0;
     }
-    else {
-      // move the head to tail, schedule the new head
-      dequeue();
-      enqueue(head);
-      head = queue[front];
-
-      c->proc = head;
-      switchuvm(head);
-      head->state = RUNNING;
-
-      swtch(&(c->scheduler), head->context);
-      switchkvm();
-
-      c->proc = 0;
-    }
-
 
     // // we should add something here to change the schedule order
     // for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){

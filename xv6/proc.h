@@ -55,6 +55,7 @@ struct proc {
   int schedticks;   // total number of timer ticks this process has been scheduled
   int sleepticks;   // number of ticks during which this process was blocked
   int switches;     // total num times this process has been scheduled
+  int curticks; // track how many ticks this process has been used
 };
 
 // Process memory is laid out contiguously, low addresses first:

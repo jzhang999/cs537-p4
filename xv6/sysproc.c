@@ -106,6 +106,8 @@ sys_setslice(void)
   int time_slice;
   if(argint(0, &pid) < 0)
     return -1;
+  if(argint(1, &time_slice) < 0)
+    return -1;
   return setslice(pid, time_slice);
 }
 
@@ -113,5 +115,13 @@ int
 sys_fork2(void)
 {
   int time_slice;
+  if(argin(0, &time_slice) < 0)
+    return -1;
   return fork2(time_slice);
+}
+
+int
+sys_getpinfo(void)
+{
+  struct 
 }
