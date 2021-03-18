@@ -49,7 +49,6 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  node *ll_node;
   int time_slice; // used for allocated time_slice
   int compticks;    // number of compensation ticks this process has used
   int schedticks;   // total number of timer ticks this process has been scheduled

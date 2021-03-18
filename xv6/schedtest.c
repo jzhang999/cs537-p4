@@ -1,7 +1,7 @@
 #include "user.h"
 #include "pstat.h"
 
-struct pstat* stat; // process statistics
+struct pstat* cur_stat; // process statistics
 
 static void fork_child(int slice, char *sleepT) {
     int pid = fork2(slice);
@@ -47,17 +47,22 @@ int main(int argc, char **argv) {
     fork_child(sliceA, sleepA);
     fork_child(sliceB, sleepB);
 
-    int compticksA;
-    int compticksB;
-    if (getpinfo(stat) == 0) {  // success
-        compticksA = stat->compticks[1];
-        compticksB = stat->compticks[2];
+    // int compticksA;
+    // int compticksB;
+    cur_stat = (struct pstat*) malloc(sizeof(struct pstat*));
+    int pidA = 0;
+    int pidB = 0;
+    if (getpinfo(cur_stat) == 0) {  // success
+        // compticksA = cur_stat->compticks[1];
+        // compticksB = cur_stat->compticks[2];
+        pidA = cur_stat->pid[1];
+        pidB = cur_stat->pid[2];
     }
     else {
         printf(2, "get info failed.\n");
     }
 
-    printf(1, "%d %d\n", compticksA, compticksB);
+    printf(1, "%d %d\n", pidA, pidB);
     
     exit();
 }

@@ -708,7 +708,7 @@ procdump(void)
 }
 
 int getpinfo(struct pstat* stat) {
-  stat = (struct pstat*) malloc(sizeof(struct pstat*));
+  // stat = (struct pstat*) malloc(sizeof(struct pstat*));
   if(stat == NULL) {
     printf(2, "malloc() error\n");
     return -1;
