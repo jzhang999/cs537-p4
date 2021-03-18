@@ -8,7 +8,7 @@
 #include "spinlock.h"
 
 #include "pstat.h" //???
-#include <stddef.h>
+
 
 struct {
   struct spinlock lock;
@@ -33,6 +33,38 @@ static void wakeup1(void *chan);
 // int front = -1;
 // int rear = -1;
 // int size = 0;
+void enqueue(struct proc* p) {
+  if (ptable.size < NPROC - 1) {
+    // if (size == 0) {
+    //   queue[0] = p;  // enqueue the first process
+    //   size++;
+    //   front = 0;
+    //   rear = 0;
+    // }
+    // else {
+    //   queue[rear + 1] = p;
+    //   size++;
+    //   rear++;
+    // }
+    ptable.tail = (ptable.tail + 1) % NPROC;
+    ptable.queue[ptable.tail] = p;
+    ptable.size++;
+  }
+  else {
+    panic("enqueue failed.\n");
+  }
+}
+
+void dequeue() {
+  // if (size != 0) {
+  //   front++;
+  //   size--;
+  // }
+  if (ptable.size != 0){
+    ptable.head = (ptable.head + 1) % NPROC;
+    ptable.size--;
+  }
+}
 
 void
 pinit(void)
@@ -282,7 +314,7 @@ int fork2(int slice){
 int
 fork(void)
 {
-  int slice = getslice(getpid()); // get caller's slice
+  int slice = getslice(myproc()->pid); // get caller's slice
   return fork2(slice);
 }
 
@@ -415,38 +447,7 @@ int getslice(int pid){
 //     }
 //   }
 // }
-void enqueue(struct proc* p) {
-  if (ptable.size < NPROC) {
-    // if (size == 0) {
-    //   queue[0] = p;  // enqueue the first process
-    //   size++;
-    //   front = 0;
-    //   rear = 0;
-    // }
-    // else {
-    //   queue[rear + 1] = p;
-    //   size++;
-    //   rear++;
-    // }
-    ptable.tail = (ptable.tail + 1) % NPROC;
-    ptable.queue[ptable.tail] = p;
-    ptable.size++;
-  }
-  else {
-    printf(2, "enqueue failed.\n");
-  }
-}
 
-void dequeue() {
-  // if (size != 0) {
-  //   front++;
-  //   size--;
-  // }
-  if (ptable.size != 0){
-    ptable.head = (ptable.head + 1) % NPROC;
-    ptable.size--;
-  }
-}
 
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
@@ -709,8 +710,7 @@ procdump(void)
 
 int getpinfo(struct pstat* stat) {
   // stat = (struct pstat*) malloc(sizeof(struct pstat*));
-  if(stat == NULL) {
-    printf(2, "malloc() error\n");
+  if(stat == 0) {
     return -1;
   }
   // NULL not defined?? #include <stddef.h>

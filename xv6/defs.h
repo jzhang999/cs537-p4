@@ -124,7 +124,7 @@ void            yield(void);
 int		getslice(int);
 int		setslice(int, int);
 int		fork2(int);
-int		sys_getpinfo(struct pstat*);
+int		getpinfo(struct pstat*);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
