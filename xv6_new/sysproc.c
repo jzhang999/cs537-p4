@@ -56,10 +56,19 @@ sys_sbrk(void)
   return addr;
 }
 
+// int
+// sys_kill(void)
+// {
+//   int pid;
+
+//   if(argint(0, &pid) < 0)
+//     return -1;
+//   return kill(pid);
+// }
 int
 sys_sleep(void)
 {
-  int n;
+  int n;  // ticks to sleep
   uint ticks0;
 
   if(argint(0, &n) < 0)
@@ -71,7 +80,7 @@ sys_sleep(void)
       release(&tickslock);
       return -1;
     }
-    sleep(&ticks, &tickslock);
+    sleep(n);
   }
   release(&tickslock);
   return 0;

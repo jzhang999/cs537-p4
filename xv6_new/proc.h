@@ -56,6 +56,8 @@ struct proc {
   int switches;     // total num times this process has been scheduled
   int curticks; // track how many ticks this process has been used
   uint target_tick;  // target wake up time
+  int cur_sleep_ticks;  // passed in argument
+  int sleeping;  // if 1, then process is sleeping, 0 otherwise
 };
 
 // Process memory is laid out contiguously, low addresses first:
