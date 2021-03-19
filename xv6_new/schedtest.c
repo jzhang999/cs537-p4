@@ -61,7 +61,13 @@ int main(int argc, char **argv) {
 
     if (getpinfo(&stat) == 0) {  // success
         // get the info for the process, given pid
+        printf("A's pid: %d\n", pidA);
+        printf("B's pid: %d\n", pidB);
         for (int i = 0; i < NPROC; i++) {
+            if (stat.inuse[i] == 1){
+                printf(1, "This is %d index\n", i);
+                printf(1, "stat's pid: %d\n", stat.pid[i]);
+            }
             if (pidA == stat.pid[i]) {
                 compticksA = stat.compticks[i];
             }

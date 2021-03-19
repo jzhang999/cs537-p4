@@ -11,10 +11,10 @@
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
-  struct proc* queue[NPROC];
-  int head;
-  int tail;
-  int size;
+  // struct proc* queue[NPROC];
+  // int head;
+  // int tail;
+  // int size;
 } ptable;
 
 static struct proc *initproc;
@@ -25,35 +25,70 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
-void enqueue(struct proc* p) { // add the process to the tail of queue
-  // cprintf("Here is the size before enqueue %d\n", ptable.size);
-  // if(ptable.size == 0 && ptable.head == 0 && ptable.tail == 0){ // first time to enqueue
-  //   ptable.queue[ptable.head] = p;
-  //   ptable.size++;
-  // } else if (ptable.size < NPROC - 1) {
-  //   ptable.tail = (ptable.tail + 1) % NPROC;
-  //   ptable.queue[ptable.tail] = p;
-  //   ptable.size++;
-  // }
-  if (ptable.size < NPROC -1){
-    ptable.tail = (ptable.tail + 1) % NPROC;
-    ptable.queue[ptable.tail] = p;
-    ptable.size++;
+static struct proc *head;
+static struct proc *tail;
+
+void enqueue(struct proc* node){
+  if (head == 0) {
+    node->next = 0;
+    head = node;
+    tail = node;
+    return;
+  }  else if (head == tail) {
+    node->next = 0;
+    head->next = node;
+    tail = head -> next;
+    return;
+  } else {
+   // cprintf("add to tail");
+    tail->next = node;
+    node->next = 0;
+    tail = tail->next;
+    return;
   }
-  else {
-    panic("enqueue failed.\n");
-  }
-  // cprintf("Here is the size after enqueue %d\n", ptable.size);
 }
 
-void dequeue() {
-  // cprintf("Here is the size before dequeue %d\n", ptable.size);
-  if (ptable.size != 0){ // move head to the next one
-    ptable.head = (ptable.head + 1) % NPROC;
-    ptable.size--;
+void dequeue(){
+  if(head == 0){
+    return;
+  } else if (head->next == 0) {
+     head = 0;
+     tail = 0;
+     return;
+  } else {
+    head = head -> next;
   }
-  // cprintf("Here is the size after dequeue %d\n", ptable.size);
 }
+
+// void enqueue(struct proc* p) { // add the process to the tail of queue
+//   // cprintf("Here is the size before enqueue %d\n", ptable.size);
+//   // if(ptable.size == 0 && ptable.head == 0 && ptable.tail == 0){ // first time to enqueue
+//   //   ptable.queue[ptable.head] = p;
+//   //   ptable.size++;
+//   // } else if (ptable.size < NPROC - 1) {
+//   //   ptable.tail = (ptable.tail + 1) % NPROC;
+//   //   ptable.queue[ptable.tail] = p;
+//   //   ptable.size++;
+//   // }
+//   if (ptable.size < NPROC -1){
+//     ptable.tail = (ptable.tail + 1) % NPROC;
+//     ptable.queue[ptable.tail] = p;
+//     ptable.size++;
+//   }
+//   else {
+//     panic("enqueue failed.\n");
+//   }
+//   // cprintf("Here is the size after enqueue %d\n", ptable.size);
+// }
+
+// void dequeue() {
+//   // cprintf("Here is the size before dequeue %d\n", ptable.size);
+//   if (ptable.size != 0){ // move head to the next one
+//     ptable.head = (ptable.head + 1) % NPROC;
+//     ptable.size--;
+//   }
+//   // cprintf("Here is the size after dequeue %d\n", ptable.size);
+// }
 
 void
 pinit(void)
@@ -157,13 +192,13 @@ found:
   return p;
 }
 
-void
-ptableinit(void)
-{
-  ptable.head = 0;
-  ptable.tail = NPROC - 1;
-  ptable.size = 0; // the queue is empty in the beginning
-}
+// void
+// ptableinit(void)
+// {
+//   ptable.head = 0;
+//   ptable.tail = NPROC - 1;
+//   ptable.size = 0; // the queue is empty in the beginning
+// }
 
 //PAGEBREAK: 32
 // Set up first user process.
@@ -173,7 +208,7 @@ userinit(void)
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
-  ptableinit();  // initialize the queue in ptable
+  // ptableinit();  // initialize the queue in ptable
   // cprintf("We are here in userinit\n");
   p = allocproc();
   // cprintf("We have allocated the first user process\n");
@@ -445,7 +480,8 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     
-    p = ptable.queue[ptable.head]; // we get the head (which is current running process)
+    // p = ptable.queue[ptable.head]; // we get the head (which is current running process)
+    p = head;
     if(p == 0){ // it is used for no runnable process
       release(&ptable.lock);
       continue;

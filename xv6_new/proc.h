@@ -57,6 +57,7 @@ struct proc {
   int curticks; // track how many ticks this process has been used
   uint target_tick;  // target wake up time
   int cur_sleep_ticks;  // passed in argument
+  struct proc *next;
   // int sleeping;  // if 1, then process is sleeping, 0 otherwise
 };
 
