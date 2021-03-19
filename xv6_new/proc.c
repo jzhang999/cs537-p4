@@ -26,10 +26,16 @@ extern void trapret(void);
 static void wakeup1(void *chan);
 
 void enqueue(struct proc* p) { // add the process to the tail of queue
-  if(ptable.size == 0 && ptable.head == 0 && ptable.tail == 0){ // first time to enqueue
-    ptable.queue[ptable.head] = p;
-    ptable.size++;
-  } else if (ptable.size < NPROC - 1) {
+  // cprintf("Here is the size before enqueue %d\n", ptable.size);
+  // if(ptable.size == 0 && ptable.head == 0 && ptable.tail == 0){ // first time to enqueue
+  //   ptable.queue[ptable.head] = p;
+  //   ptable.size++;
+  // } else if (ptable.size < NPROC - 1) {
+  //   ptable.tail = (ptable.tail + 1) % NPROC;
+  //   ptable.queue[ptable.tail] = p;
+  //   ptable.size++;
+  // }
+  if (ptable.size < NPROC -1){
     ptable.tail = (ptable.tail + 1) % NPROC;
     ptable.queue[ptable.tail] = p;
     ptable.size++;
@@ -37,13 +43,16 @@ void enqueue(struct proc* p) { // add the process to the tail of queue
   else {
     panic("enqueue failed.\n");
   }
+  // cprintf("Here is the size after enqueue %d\n", ptable.size);
 }
 
 void dequeue() {
+  // cprintf("Here is the size before dequeue %d\n", ptable.size);
   if (ptable.size != 0){ // move head to the next one
     ptable.head = (ptable.head + 1) % NPROC;
     ptable.size--;
   }
+  // cprintf("Here is the size after dequeue %d\n", ptable.size);
 }
 
 void
@@ -121,6 +130,7 @@ found:
   p->curticks = 0;  
   p->target_tick = 0;
   p->cur_sleep_ticks = 0;  // intialize the all required fields
+  // cprintf("We are in allocproc, and initialized all required field\n");
 
   release(&ptable.lock);
 
@@ -152,7 +162,7 @@ void
 ptableinit(void)
 {
   ptable.head = 0;
-  ptable.tail = 0;
+  ptable.tail = NPROC - 1;
   ptable.size = 0; // the queue is empty in the beginning
 }
 
@@ -165,7 +175,9 @@ userinit(void)
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
   ptableinit();  // initialize the queue in ptable
+  // cprintf("We are here in userinit\n");
   p = allocproc();
+  // cprintf("We have allocated the first user process\n");
   
   initproc = p;
   if((p->pgdir = setupkvm()) == 0)
@@ -193,6 +205,7 @@ userinit(void)
   acquire(&ptable.lock);
 
   enqueue(p); // add the first user process to queue
+  // cprintf("We have add this user process to the queue\n");
   p->state = RUNNABLE;
 
   release(&ptable.lock);
@@ -261,10 +274,13 @@ fork2(int slice)
 
   pid = np->pid;
   np->time_slice = slice; // set up the process to its parent slice
+
+  // cprintf("We are in the fork2 function\n");
   
   acquire(&ptable.lock);
   
   enqueue(np); // add this process to the queue
+  // cprintf("We are in fork2 enqueue\n");
   np->state = RUNNABLE;
 
   release(&ptable.lock);
@@ -278,6 +294,7 @@ fork2(int slice)
 int
 fork(void)
 {
+  // cprintf("We are in the fork function\n");
   int slice = getslice(myproc()->pid); // get caller's slice
   return fork2(slice);
 }
@@ -324,6 +341,7 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+  // cprintf("We are in exit stage and call dequeue\n");
   dequeue(); // remove the exited process from queue
   sched();
   panic("zombie exit");
@@ -367,6 +385,7 @@ wait(void)
       release(&ptable.lock);
       return -1;
     }
+    // cprintf("We are in the wait stage and it called sleep\n");
 
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
     sleep(curproc, &ptable.lock);  //DOC: wait-sleep
@@ -412,7 +431,7 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
-  
+
   for(;;){
     // Enable interrupts on this processor.
     sti();
@@ -421,46 +440,83 @@ scheduler(void)
     acquire(&ptable.lock);
     
     p = ptable.queue[ptable.head]; // we get the head (which is current running process)
-    p->curticks++;
-    p->schedticks++; // update its scheduled time ticks
-    if (p->curticks > p->time_slice && 
-        p->curticks <= (p->time_slice + p->cur_sleep_ticks) && p->cur_sleep_ticks != 0) {
-      // update compticks
-      p->compticks++;
+    if(p == 0){
+      release(&ptable.lock);
+      continue;
     }
+    // cprintf("This is the pid for process %d\n", p->pid);
+    // cprintf("This is the name of process %s\n", p->name);
+
+    if (p->curticks < (p->time_slice + p->cur_sleep_ticks)){
+      if (p->curticks > p->time_slice){
+        p->compticks++;
+      }
+      p->curticks++;
+      p->schedticks++;
+    } else {
+      dequeue();
+      enqueue(p);
+      p->curticks = 0;
+      p->switches++;
+      release(&ptable.lock);
+      continue;
+    }
+
+    // Switch to chosen process.  It is the process's job
+    // to release ptable.lock and then reacquire it
+    // before jumping back to us.
+    c->proc = p;
+    switchuvm(p);
+    p->state = RUNNING;
+
+    swtch(&(c->scheduler), p->context);
+    switchkvm();
+
+    // Process is done running for now.
+    // It should have changed its p->state before coming back.
+    c->proc = 0;
+    release(&ptable.lock);
 
     // it means we should deschedule the current process
-    if(p->curticks >= p->time_slice + p->cur_sleep_ticks){ // need to check here again, should we increment first or check slice first
-      int next = (ptable.head + 1) % NPROC; // move to the next process
-      p->curticks = 0; // we are ready to deschedule it, so updat its current tick to 0 for next time
-      p->state = RUNNABLE; // mark the process into RUNNABLE state for next time
-      dequeue(); // remove it from queue
-      enqueue(p); // add it to tail
+    // if(p->curticks >= p->time_slice + p->cur_sleep_ticks){ // need to check here again, should we increment first or check slice first
+    //   cprintf("Here is the current time_slice for this process %d\n", p->time_slice);
+    //   int next = (ptable.head + 1) % NPROC; // move to the next process
+    //   p->curticks = 0; // we are ready to deschedule it, so updat its current tick to 0 for next time
+    //   p->state = RUNNABLE; // mark the process into RUNNABLE state for next time
+    //   dequeue(); // remove it from queue
+    //   enqueue(p); // add it to tail
+    //   cprintf("We dequeue the process\n");
 
-      if(ptable.size == 1){ // only current one are ready for next time, still increment its swithces number
-        p->switches++;
-      } else{ // switch to new one
-        ptable.head = next;
-        p = ptable.queue[ptable.head]; // update p to chosen process
-        p->switches++;  // update its number of switches
-      }
+    //   if(ptable.size == 1){ // only current one are ready for next time, still increment its swithces number
+    //     p->switches++;
+    //     cprintf("We are in the condition ptable.size == 1\n");
+    //     cprintf("The process name is %s\n", p->name);
+    //   } else{ // switch to new one
+    //     ptable.head = next;
+    //     p = ptable.queue[ptable.head]; // update p to chosen process
+    //     p->switches++;  // update its number of switches
+    //     cprintf("We are in the condition to switch to new one\n");
+    //   }
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+    //   // Switch to chosen process.  It is the process's job
+    //   // to release ptable.lock and then reacquire it
+    //   // before jumping back to us.
+    //   c->proc = p;
+    //   switchuvm(p);
+    //   p->state = RUNNING;
 
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
+    //   swtch(&(c->scheduler), p->context);
+    //   switchkvm();
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
-    }
+    //   // Process is done running for now.
+    //   // It should have changed its p->state before coming back.
+    //   c->proc = 0;
+    // } else{
+    //   p->curticks++;
+    //   p->schedticks++;
+    // }
 
-    release(&ptable.lock);
+    // release(&ptable.lock);
 
   }
 }
@@ -477,6 +533,7 @@ sched(void)
 {
   int intena;
   struct proc *p = myproc();
+  // cprintf("We are in sched and passed the myproc()\n");
 
   if(!holding(&ptable.lock))
     panic("sched ptable.lock");
@@ -548,8 +605,10 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
-  p->cur_sleep_ticks = 0;
-  dequeue(); // move the current sleeping process out of queue
+  // p->cur_sleep_ticks = 0;
+  // cprintf("The sleep process name is %s\n", p->name);
+  // cprintf("We are in sleep stage and call dequeue\n");
+  // dequeue(); // move the current sleeping process out of queue
 
   sched();
 
@@ -569,19 +628,24 @@ sleep(void *chan, struct spinlock *lk)
 static void
 wakeup1(void *chan)
 {
+  // struct proc *p;
+
+  // for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  //   if(p->state == SLEEPING && p->chan == chan){
+  //     acquire(&tickslock);
+  //     if (ticks >= p->target_tick && chan == &ticks){
+  //       p->state = RUNNABLE;
+  //       enqueue(p);
+  //     }
+  //     p->sleepticks++;
+  //     p->cur_sleep_ticks++; // track the compticks
+  //     release(&tickslock);
+  //   }
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan){
-      acquire(&tickslock);
-      if (ticks >= p->target_tick && chan == &ticks){
-        p->state = RUNNABLE;
-        enqueue(p);
-      }
-      p->sleepticks++;
-      p->cur_sleep_ticks++; // track the compticks
-      release(&tickslock);
-    }
+    if(p->state == SLEEPING && p->chan == chan)
+      p->state = RUNNABLE;
 }
 
 // Wake up all processes sleeping on chan.
@@ -655,9 +719,9 @@ procdump(void)
 
 int getpinfo(struct pstat* stat) {
   // stat = (struct pstat*) malloc(sizeof(struct pstat*));
-  if(stat == 0) {
-    return -1;
-  }
+  // if(stat == 0) {
+  //   return -1;
+  // }
 
   int index = 0;  // index to put info into pstat
   struct proc *p;

@@ -1,7 +1,7 @@
 #include "user.h"
 #include "pstat.h"
 
-struct pstat* cur_stat; // process statistics
+//struct pstat* cur_stat; // process statistics
 int pidA = -1;
 int pidB = -1;
 
@@ -39,6 +39,7 @@ int main(int argc, char **argv) {
         exit();
     }
 
+    struct pstat stat;
     // get the args
     int sliceA = atoi(argv[1]);
     char* sleepA = argv[2];
@@ -54,18 +55,18 @@ int main(int argc, char **argv) {
     // not sure where to put 
     sleep(sleepParent);
 
-    cur_stat = (struct pstat*) malloc(sizeof(struct pstat*));
-    int compticksA;
-    int compticksB;
+    // cur_stat = (struct pstat*) malloc(sizeof(struct pstat*));
+    int compticksA = -1;
+    int compticksB = -1;
 
-    if (getpinfo(cur_stat) == 0) {  // success
+    if (getpinfo(&stat) == 0) {  // success
         // get the info for the process, given pid
         for (int i = 0; i < NPROC; i++) {
-            if (pidA == cur_stat->pid[i]) {
-                compticksA = cur_stat->compticks[i];
+            if (pidA == stat.pid[i]) {
+                compticksA = stat.compticks[i];
             }
-            if (pidB == cur_stat->pid[i]) {
-                compticksB = cur_stat->compticks[i];
+            if (pidB == stat.pid[i]) {
+                compticksB = stat.compticks[i];
             }
         }
     }

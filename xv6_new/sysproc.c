@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
+#include "pstat.h"
 
 int
 sys_fork(void)
@@ -61,18 +62,31 @@ sys_sleep(void)
 {
   int n;  // ticks to sleep
   uint ticks0;
-
+  
   if(argint(0, &n) < 0)
     return -1;
   acquire(&tickslock);
   ticks0 = ticks;
-  myproc()->target_tick = n + ticks0;  // save the target wake up time 
-
-  if(myproc()->killed){
-    release(&tickslock);
-    return -1;
+  while(ticks - ticks0 < n){
+    if(myproc()->killed){
+      release(&tickslock);
+      return -1;
+    }
+    sleep(&ticks, &tickslock);
   }
-  sleep(&ticks, &tickslock);
+
+  // if(argint(0, &n) < 0)
+  //   return -1;
+  // acquire(&tickslock);
+  // ticks0 = ticks;
+  // myproc()->target_tick = n + ticks0;  // save the target wake up time 
+  // myproc()->cur_sleep_ticks = 0;
+
+  // if(myproc()->killed){
+  //   release(&tickslock);
+  //   return -1;
+  // }
+  // sleep(&ticks, &tickslock);
 
   // while(ticks - ticks0 < n){
   //   if(myproc()->killed){
@@ -133,8 +147,12 @@ sys_getpinfo(void)
 {
   struct pstat *stat;
 
-  if(argptr(1, (char**)&stat, sizeof(struct pstat*)) < 0)
+  if(argptr(0, (void*)&stat, sizeof(struct pstat)) < 0) {
     return -1;
+  }
+  if (stat == 0){
+    return -1;
+  }
   return getpinfo(stat);
 }
 
