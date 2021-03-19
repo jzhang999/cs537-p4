@@ -80,7 +80,8 @@ sys_sleep(void)
   acquire(&tickslock);
   ticks0 = ticks;
   myproc()->target_tick = n + ticks0;  // save the target wake up time 
-  myproc()->cur_sleep_ticks = 0;
+  myproc()->cur_sleep_ticks = n;
+  myproc()->sleepticks = myproc()->sleepticks + n;
 
   // while(ticks - ticks0 < n){
   //   if(myproc()->killed){

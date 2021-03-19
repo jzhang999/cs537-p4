@@ -123,13 +123,6 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
-  p->compticks = 0;
-  p->schedticks = 0;
-  p->sleepticks = 0;
-  p->switches = 0;
-  p->curticks = 0;  
-  p->target_tick = 0;
-  p->cur_sleep_ticks = 0;  // intialize the all required fields
   // cprintf("We are in allocproc, and initialized all required field\n");
 
   release(&ptable.lock);
@@ -154,6 +147,14 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
+
+  p->compticks = 0;
+  p->schedticks = 0;
+  p->sleepticks = 0;
+  p->switches = 0;
+  p->curticks = 0;  
+  p->target_tick = 0;
+  p->cur_sleep_ticks = 0;  // intialize the all required fields
 
   return p;
 }
@@ -192,8 +193,6 @@ userinit(void)
   p->tf->eflags = FL_IF;
   p->tf->esp = PGSIZE;
   p->tf->eip = 0;  // beginning of initcode.S
-  p->time_slice = 1; // initial user process has time_slice 1
-  p->switches = 1; // because it will be schedule first
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
@@ -204,9 +203,11 @@ userinit(void)
   // because the assignment might not be atomic.
   acquire(&ptable.lock);
 
-  enqueue(p); // add the first user process to queue
   // cprintf("We have add this user process to the queue\n");
   p->state = RUNNABLE;
+  p->time_slice = 1; // initial user process has time_slice 1
+  p->switches = 1; // because it will be schedule first
+  enqueue(p); // add the first user process to queue
 
   release(&ptable.lock);
 }
@@ -273,15 +274,16 @@ fork2(int slice)
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
 
   pid = np->pid;
-  np->time_slice = slice; // set up the process to its parent slice
 
   // cprintf("We are in the fork2 function\n");
   
   acquire(&ptable.lock);
   
-  enqueue(np); // add this process to the queue
+  // enqueue(np); // add this process to the queue
   // cprintf("We are in fork2 enqueue\n");
   np->state = RUNNABLE;
+  np->time_slice = slice; // set up the process to its parent slice
+  enqueue(np); // add this process to the queue
 
   release(&ptable.lock);
 
@@ -339,10 +341,11 @@ exit(void)
     }
   }
 
+  dequeue(); // remove the exited process from queue
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
   // cprintf("We are in exit stage and call dequeue\n");
-  dequeue(); // remove the exited process from queue
+  // dequeue(); // remove the exited process from queue
   sched();
   panic("zombie exit");
 }
@@ -397,23 +400,28 @@ int setslice(int pid, int slice){
   if (pid < 0 || slice <= 0){
     return -1;
   }
-
+  acquire(&ptable.lock);
   for(cur_p = ptable.proc; cur_p < &ptable.proc[NPROC]; cur_p++){
     if (cur_p->pid == pid){
       cur_p->time_slice = slice;
+      release(&ptable.lock);
       return 0;
     }
   }
+  release(&ptable.lock);
   return -1;
 }
 
 int getslice(int pid){
   struct proc *cur_p;
+  acquire(&ptable.lock);
   for(cur_p = ptable.proc; cur_p < &ptable.proc[NPROC]; cur_p++){
     if (cur_p->pid == pid){
+      release(&ptable.lock);
       return cur_p->time_slice;
     }
   }
+  release(&ptable.lock);
   return -1;
 }
 
@@ -447,76 +455,79 @@ scheduler(void)
     // cprintf("This is the pid for process %d\n", p->pid);
     // cprintf("This is the name of process %s\n", p->name);
 
-    // if (p->curticks < (p->time_slice + p->cur_sleep_ticks)){
-    //   if (p->curticks > p->time_slice){
-    //     p->compticks++;
-    //   }
-    //   p->curticks++;
-    //   p->schedticks++;
-    // } else {
-    //   dequeue();
-    //   enqueue(p);
-    //   p->curticks = 0;
-    //   p->switches++;
-    //   release(&ptable.lock);
-    //   continue;
-    // }
-
-    // // Switch to chosen process.  It is the process's job
-    // // to release ptable.lock and then reacquire it
-    // // before jumping back to us.
-    // c->proc = p;
-    // switchuvm(p);
-    // p->state = RUNNING;
-
-    // swtch(&(c->scheduler), p->context);
-    // switchkvm();
-
-    // // Process is done running for now.
-    // // It should have changed its p->state before coming back.
-    // c->proc = 0;
-    // release(&ptable.lock);
-
-    // it means we should deschedule the current process
-    if(p->curticks >= p->time_slice + p->cur_sleep_ticks){ // need to check here again, should we increment first or check slice first
-      // cprintf("Here is the current time_slice for this process %d\n", p->time_slice);
-      int next = (ptable.head + 1) % NPROC; // move to the next process
-      p->curticks = 0; // we are ready to deschedule it, so updat its current tick to 0 for next time
-      p->state = RUNNABLE; // mark the process into RUNNABLE state for next time
-      dequeue(); // remove it from queue
-      enqueue(p); // add it to tail
-      // cprintf("We dequeue the process\n");
-
-      if(ptable.size == 1){ // only current one are ready for next time, still increment its swithces number
-        p->switches++;
-        // cprintf("We are in the condition ptable.size == 1\n");
-        // cprintf("The process name is %s\n", p->name);
-      } else{ // switch to new one
-        ptable.head = next;
-        p = ptable.queue[ptable.head]; // update p to chosen process
-        p->switches++;  // update its number of switches
-        // cprintf("We are in the condition to switch to new one\n");
-      }
-
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
-
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
-
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
-    } else{
+    if (p->curticks < (p->time_slice + p->cur_sleep_ticks)){
       p->curticks++;
       p->schedticks++;
+      if (p->curticks > p->time_slice){
+        p->compticks++;
+      }
+    } else {
+      dequeue();
+      if (p->state != SLEEPING){
+        enqueue(p);
+      }
+      p->curticks = 0;
+      p->cur_sleep_ticks = 0;
+      p->switches++;
+      release(&ptable.lock);
+      continue;
     }
 
-     release(&ptable.lock);
+    // Switch to chosen process.  It is the process's job
+    // to release ptable.lock and then reacquire it
+    // before jumping back to us.
+    c->proc = p;
+    switchuvm(p);
+    p->state = RUNNING;
+
+    swtch(&(c->scheduler), p->context);
+    switchkvm();
+
+    // Process is done running for now.
+    // It should have changed its p->state before coming back.
+    c->proc = 0;
+    release(&ptable.lock);
+
+    // it means we should deschedule the current process
+    // if(p->curticks >= p->time_slice + p->cur_sleep_ticks){ // need to check here again, should we increment first or check slice first
+    //   // cprintf("Here is the current time_slice for this process %d\n", p->time_slice);
+    //   int next = (ptable.head + 1) % NPROC; // move to the next process
+    //   p->curticks = 0; // we are ready to deschedule it, so updat its current tick to 0 for next time
+    //   p->state = RUNNABLE; // mark the process into RUNNABLE state for next time
+    //   dequeue(); // remove it from queue
+    //   enqueue(p); // add it to tail
+    //   // cprintf("We dequeue the process\n");
+
+    //   if(ptable.size == 1){ // only current one are ready for next time, still increment its swithces number
+    //     p->switches++;
+    //     // cprintf("We are in the condition ptable.size == 1\n");
+    //     // cprintf("The process name is %s\n", p->name);
+    //   } else{ // switch to new one
+    //     ptable.head = next;
+    //     p = ptable.queue[ptable.head]; // update p to chosen process
+    //     p->switches++;  // update its number of switches
+    //     // cprintf("We are in the condition to switch to new one\n");
+    //   }
+
+    //   // Switch to chosen process.  It is the process's job
+    //   // to release ptable.lock and then reacquire it
+    //   // before jumping back to us.
+    //   c->proc = p;
+    //   switchuvm(p);
+    //   p->state = RUNNING;
+
+    //   swtch(&(c->scheduler), p->context);
+    //   switchkvm();
+
+    //   // Process is done running for now.
+    //   // It should have changed its p->state before coming back.
+    //   c->proc = 0;
+    // } else{
+    //   p->curticks++;
+    //   p->schedticks++;
+    // }
+
+    //  release(&ptable.lock);
 
   }
 }
@@ -605,10 +616,10 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
-  p->cur_sleep_ticks = 0;
+  // p->cur_sleep_ticks = 0;
   // cprintf("The sleep process name is %s\n", p->name);
   // cprintf("We are in sleep stage and call dequeue\n");
-  dequeue(); // move the current sleeping process out of queue
+  //dequeue(); // move the current sleeping process out of queue
   // panic("We are dequeue here\n");
 
   sched();
@@ -633,16 +644,25 @@ wakeup1(void *chan)
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->state == SLEEPING && p->chan == chan){
-      acquire(&tickslock);
-      if (ticks >= p->target_tick && chan != &ticks){
-        // panic("We are in wakeup");
+      // acquire(&tickslock);
+      if(chan == &ticks){
+        if(ticks >= p->target_tick){
+          p->state = RUNNABLE;
+          enqueue(p);
+        } 
+      } else{
         p->state = RUNNABLE;
         enqueue(p);
-      } else {
-        p->sleepticks++;
-        p->cur_sleep_ticks++; // track the compticks
       }
-      release(&tickslock);
+      // if (ticks >= p->target_tick && chan != &ticks){
+      //   // panic("We are in wakeup");
+      //   p->state = RUNNABLE;
+      //   enqueue(p);
+      // } else {
+      //   p->sleepticks++;
+      //   p->cur_sleep_ticks++; // track the compticks
+      // }
+      // release(&tickslock);
     }
   }
   // struct proc *p;
