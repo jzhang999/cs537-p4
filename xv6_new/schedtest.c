@@ -46,12 +46,13 @@ int main(int argc, char **argv) {
     char* sleepB = argv[4];
     int sleepParent = atoi(argv[5]);
 
-    // not sure where to put 
-    sleep(sleepParent);
     
     // create 2 child processes
     pidA = fork_child(sliceA, sleepA);
     pidB = fork_child(sliceB, sleepB);
+
+    // not sure where to put 
+    sleep(sleepParent);
 
     cur_stat = (struct pstat*) malloc(sizeof(struct pstat*));
     int compticksA;

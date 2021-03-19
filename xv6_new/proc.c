@@ -118,7 +118,9 @@ found:
   p->schedticks = 0;
   p->sleepticks = 0;
   p->switches = 0;
-  p->curticks = 0;  // intialize the all required fields
+  p->curticks = 0;  
+  p->target_tick = 0;
+  p->cur_sleep_ticks = 0;  // intialize the all required fields
 
   release(&ptable.lock);
 
@@ -421,9 +423,14 @@ scheduler(void)
     p = ptable.queue[ptable.head]; // we get the head (which is current running process)
     p->curticks++;
     p->schedticks++; // update its scheduled time ticks
-    
+    if (p->curticks > p->time_slice && 
+        p->curticks <= (p->time_slice + p->cur_sleep_ticks) && p->cur_sleep_ticks != 0) {
+      // update compticks
+      p->compticks++;
+    }
+
     // it means we should deschedule the current process
-    if(p->curticks >= p->time_slice + p->compticks){ // need to check here again, should we increment first or check slice first
+    if(p->curticks >= p->time_slice + p->cur_sleep_ticks){ // need to check here again, should we increment first or check slice first
       int next = (ptable.head + 1) % NPROC; // move to the next process
       p->curticks = 0; // we are ready to deschedule it, so updat its current tick to 0 for next time
       p->state = RUNNABLE; // mark the process into RUNNABLE state for next time
@@ -541,6 +548,7 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
+  p->cur_sleep_ticks = 0;
   dequeue(); // move the current sleeping process out of queue
 
   sched();
@@ -571,6 +579,7 @@ wakeup1(void *chan)
         enqueue(p);
       }
       p->sleepticks++;
+      p->cur_sleep_ticks++; // track the compticks
       release(&tickslock);
     }
 }
@@ -656,7 +665,7 @@ int getpinfo(struct pstat* stat) {
     if (p->state != UNUSED){
       stat->inuse[index] = 1;
     } else {
-      state->inuse[index] = 0;
+      stat->inuse[index] = 0;
     }
     stat->pid[index] = p->pid;
     stat->timeslice[index] = p->time_slice;

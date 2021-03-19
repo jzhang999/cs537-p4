@@ -56,15 +56,6 @@ sys_sbrk(void)
   return addr;
 }
 
-// int
-// sys_kill(void)
-// {
-//   int pid;
-
-//   if(argint(0, &pid) < 0)
-//     return -1;
-//   return kill(pid);
-// }
 int
 sys_sleep(void)
 {
@@ -75,13 +66,21 @@ sys_sleep(void)
     return -1;
   acquire(&tickslock);
   ticks0 = ticks;
-  while(ticks - ticks0 < n){
-    if(myproc()->killed){
-      release(&tickslock);
-      return -1;
-    }
-    sleep(&ticks, &tickslock);
+  myproc()->target_tick = n + ticks0;  // save the target wake up time 
+
+  if(myproc()->killed){
+    release(&tickslock);
+    return -1;
   }
+  sleep(&ticks, &tickslock);
+
+  // while(ticks - ticks0 < n){
+  //   if(myproc()->killed){
+  //     release(&tickslock);
+  //     return -1;
+  //   }
+  //   sleep(&ticks, &tickslock);
+  // }
   release(&tickslock);
   return 0;
 }
