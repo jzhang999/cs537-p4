@@ -124,7 +124,13 @@ found:
   p->state = EMBRYO;
   p->pid = nextpid++;
   // cprintf("We are in allocproc, and initialized all required field\n");
-
+  p->compticks = 0;
+  p->schedticks = 0;
+  p->sleepticks = 0;
+  p->switches = 0;
+  p->curticks = 0;  
+  p->target_tick = 0;
+  p->cur_sleep_ticks = 0;  // intialize the all required fields
   release(&ptable.lock);
 
   // Allocate kernel stack.
@@ -147,14 +153,6 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
-
-  p->compticks = 0;
-  p->schedticks = 0;
-  p->sleepticks = 0;
-  p->switches = 0;
-  p->curticks = 0;  
-  p->target_tick = 0;
-  p->cur_sleep_ticks = 0;  // intialize the all required fields
 
   return p;
 }
