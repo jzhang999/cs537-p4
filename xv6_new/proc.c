@@ -518,22 +518,15 @@ forkret(void)
 // Atomically release lock and sleep on chan.
 // Reacquires lock when awakened.
 void
-sleep(int num_ticks)
+sleep(void *chan, struct spinlock *lk)
 {
   struct proc *p = myproc();
   
-  acquire(&tickslock);
-  void *chan = &ticks;
-  struct spinlock *lk = &tickslock;
-
   if(p == 0)
     panic("sleep");
 
   if(lk == 0)
     panic("sleep without lk");
-
-  p->target_tick = num_ticks + ticks;
-  p->cur_sleep_ticks = num_ticks;
 
   // Must acquire ptable.lock in order to
   // change p->state and then call sched.
@@ -548,6 +541,7 @@ sleep(int num_ticks)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
+  dequeue(); // move the current sleeping process out of queue
 
   sched();
 
@@ -559,8 +553,6 @@ sleep(int num_ticks)
     release(&ptable.lock);
     acquire(lk);
   }
-  
-  release(&tickslock);  // not sure
 }
 
 //PAGEBREAK!
@@ -576,7 +568,7 @@ wakeup1(void *chan)
       acquire(&tickslock);
       if (ticks >= p->target_tick && chan == &ticks)
         p->state = RUNNABLE;
-      
+        enqueue(p);
       release(&tickslock);
 }
 
@@ -658,8 +650,11 @@ int getpinfo(struct pstat* stat) {
   int index = 0;  // index to put info into pstat
   struct proc *p;
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    
-    stat->inuse[index] = 1;
+    if (p->state != UNUSED){
+      stat->inuse[index] = 1;
+    } else {
+      state->inuse[index] = 0;
+    }
     stat->pid[index] = p->pid;
     stat->timeslice[index] = p->time_slice;
     stat->compticks[index] = p->compticks;
