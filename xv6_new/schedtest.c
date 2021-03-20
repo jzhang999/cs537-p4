@@ -1,37 +1,6 @@
 #include "user.h"
 #include "pstat.h"
 
-//struct pstat* cur_stat; // process statistics
-int pidA = -1;
-int pidB = -1;
-
-static int fork_child(int slice, char *sleepT) {
-    int pid = fork2(slice);
-    int child_pid = -1;
-
-    if (pid != -1) {
-        if (pid == 0) {  // child
-            child_pid = getpid();
-            // args to exec
-            char *args[2];
-            args[0] = "loop";
-            args[1] = sleepT;
-            exec(args[0], args);
-
-            // exec failed
-            printf(2, "exec failed\n");
-            exit();
-        } else {  // parent
-            wait();
-        }
-
-    } else {  // fork failed
-        printf(2, "fork failed\n");
-    }
-
-    return child_pid;
-}
-
 int main(int argc, char **argv) {
     // takes exactly 5 arguments
     if(argc != 6){
@@ -47,40 +16,47 @@ int main(int argc, char **argv) {
     char* sleepB = argv[4];
     int sleepParent = atoi(argv[5]);
 
-    
-    // create 2 child processes
-    pidA = fork_child(sliceA, sleepA);
-    pidB = fork_child(sliceB, sleepB);
+    int pidA = -1;
+    int pidB = -1;
+    int comptickA = -1;
+    int comptickB = -1;
+    int pidA_c = -1;
+    int pidB_c = -1;
 
-    // not sure where to put 
+    pidA = fork2(sliceA);
+    if (pidA == 0){
+        char *args[3];
+        args[0] = "loop";
+        args[1] = sleepA;
+        args[2] = '\0';
+        exec("loop", args);
+    }
+    pidA_c = pidA; // parent
+    pidB = fork2(sliceB);
+    if (pidB == 0){
+        char *args[2];
+        args[0] = "loop";
+        args[1] = sleepB;
+        args[2] = '\0';
+        exec("loop", args);
+    }
+    pidB_c = pidB;
     sleep(sleepParent);
 
-    // cur_stat = (struct pstat*) malloc(sizeof(struct pstat*));
-    int compticksA = -1;
-    int compticksB = -1;
-
-    if (getpinfo(&stat) == 0) {  // success
-        // get the info for the process, given pid
-        printf("A's pid: %d\n", pidA);
-        printf("B's pid: %d\n", pidB);
+    // wait();
+    // wait();
+    if (getpinfo(&stat) == 0){
         for (int i = 0; i < NPROC; i++) {
-            if (stat.inuse[i] == 1){
-                printf(1, "This is %d index\n", i);
-                printf(1, "stat's pid: %d\n", stat.pid[i]);
+            if (pidA_c == stat.pid[i]) {
+                comptickA = stat.compticks[i];
             }
-            if (pidA == stat.pid[i]) {
-                compticksA = stat.compticks[i];
-            }
-            if (pidB == stat.pid[i]) {
-                compticksB = stat.compticks[i];
+            if (pidB_c == stat.pid[i]) {
+                comptickB = stat.compticks[i];
             }
         }
+        printf(1, "%d %d\n", comptickA, comptickB); 
     }
-    else {
-        printf(2, "get info failed.\n");
-    }
-
-    printf(1, "%d %d\n", compticksA, compticksB);
-    
-    exit();
+    wait();
+    wait();
+    exit(); 
 }

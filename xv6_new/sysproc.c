@@ -62,47 +62,23 @@ sys_sleep(void)
 {
   int n;  // ticks to sleep
   uint ticks0;
-  
-  // if(argint(0, &n) < 0)
-  //   return -1;
-  // acquire(&tickslock);
-  // ticks0 = ticks;
-  // while(ticks - ticks0 < n){
-  //   if(myproc()->killed){
-  //     release(&tickslock);
-  //     return -1;
-  //   }
-  //   sleep(&ticks, &tickslock);
-  // }
 
   if(argint(0, &n) < 0)
     return -1;
+  
   acquire(&tickslock);
   ticks0 = ticks;
   myproc()->target_tick = n + ticks0;  // save the target wake up time 
-  myproc()->cur_sleep_ticks = n;
-  myproc()->sleepticks = myproc()->sleepticks + n;
+  myproc()->cur_sleep_ticks = n; // the time we going to comp
+  myproc()->curticks = 0; // update its current tick because of sleep
+  myproc()->sleepticks = myproc()->sleepticks + n; // total time to sleep
 
-  // while(ticks - ticks0 < n){
-  //   if(myproc()->killed){
-  //     release(&tickslock);
-  //     return -1;
-  //   }
-  //   sleep(&ticks, &tickslock);
-  // }
   if(myproc()->killed){
     release(&tickslock);
     return -1;
   }
   sleep(&ticks, &tickslock);
 
-  // while(ticks - ticks0 < n){
-  //   if(myproc()->killed){
-  //     release(&tickslock);
-  //     return -1;
-  //   }
-  //   sleep(&ticks, &tickslock);
-  // }
   release(&tickslock);
   return 0;
 }
